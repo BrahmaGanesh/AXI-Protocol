@@ -1,4 +1,4 @@
-class axi_driver extends uvm_driver;
+class axi_driver extends uvm_driver #(axi_transaction);
     `uvm_component_utils(axi_driver)
 
     virtual axi_interface vif;
@@ -30,6 +30,13 @@ class axi_driver extends uvm_driver;
                 @(posedge vif.clk);
                 wait(vif.wready);
                 vif.wvalid <= 0;
+
+                vif.bready <= 1;
+                @(posedge vif.clk);
+                wait(vif.bvalid);
+                vif.bready <= 0;
+                
+                `uvm_info("DRV", $sformatf("Write transaction to address %0h with data %0h", tr.awaddr, tr.wdata), UVM_MEDIUM)
             end
             else begin
                 vif.araddr <= tr.araddr;
@@ -37,8 +44,16 @@ class axi_driver extends uvm_driver;
                 @(posedge vif.clk);
                 wait(vif.arready);
                 vif.arvalid <= 0;
+
+                vif.rready <= 1;
+                @(posedge vif.clk);
+                wait(vif.rvalid);
+                vif.rready <= 0;
+
+                `uvm_info("DRV", $sformatf("Read transaction from address %0h", tr.araddr), UVM_MEDIUM)
             end
             seq_item_port.item_done();
+            #1;
         end
     endtask
 endclass
