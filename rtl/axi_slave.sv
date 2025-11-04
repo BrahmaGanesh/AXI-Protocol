@@ -1,4 +1,4 @@
-module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
+module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
 
     logic [DATA_WIDTH -1 : 0] mem [0:255];
 

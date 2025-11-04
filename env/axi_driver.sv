@@ -21,8 +21,8 @@ class axi_driver extends uvm_driver #(axi_transaction);
             if(tr.wr_en)begin
                 vif.awvalid <= 1;
                 vif.awaddr <= tr.awaddr;
-                @(posedge vif.clk);
-                wait(vif.awready);
+                do @(posedge vif.clk);
+                while(!vif.awready);
                 vif.awvalid <= 0;
 
                 vif.wdata <= tr.wdata;
