@@ -47,9 +47,9 @@ module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
     function automatic [31:0] data_wrap_wr(input [31:0] addr,input [31:0] wdata_i,input [3:0] wstrb,input [7:0] boundary,input [3:0] wsize);
         logic [31:0] next_addr;
         begin
-            for(int i=0;i<4;i++) if(intf.wstrb[i]) mem[addr + i] = wdata_i[8*i +: 8];
+            for(int i=0;i<4;i++) if(wstrb[i]) mem[addr + i] = wdata_i[8*i +: 8];
             next_addr = addr + (1 << wsize);
-            if((next_addr & boundary -1 ) == 0)
+            if((next_addr & (boundary -1) ) == 0)
                 next_addr = addr - boundary + (1 << wsize);
             return next_addr;
         end
@@ -74,19 +74,19 @@ module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
         begin
             intf.rdata = {mem[addr+3],mem[addr+2],mem[addr+1],mem[addr]};
             next_addr = addr + ( 1 << rsize);
-            if ((next_addr & boundary - 1)==0)
+            if ((next_addr & (boundary - 1))==0)
                 next_addr = addr - boundary + (1 << rsize);
             return next_addr;
         end
     endfunction
 
-    function automatic [7:0] warp_boundary (input [7:0] len, input [2:0] size);
+    function automatic [7:0] wrap_boundary (input [7:0] len, input [2:0] size);
         case(len)
-            4'd1 : warp_boundary = 2 * ( 1 << size );
-            4'd3 : warp_boundary = 4 * ( 1 << size );
-            4'd7 : warp_boundary = 8 * ( 1 << size );
-            4'd15: warp_boundary = 16 * ( 1 << size );
-            default : warp_boundary = (len + 1) * (1 << size);
+            4'd1 : wrap_boundary = 2 * ( 1 << size );
+            4'd3 : wrap_boundary = 4 * ( 1 << size );
+            4'd7 : wrap_boundary = 8 * ( 1 << size );
+            4'd15: wrap_boundary = 16 * ( 1 << size );
+            default : wrap_boundary = (len + 1) * (1 << size);
         endcase
     endfunction   
 
@@ -138,7 +138,7 @@ module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
                     2'b00 : retaddr_next = data_fixed_wr(nextaddr,intf.wdata,intf.wstrb);
                     2'b01 : retaddr_next = data_incr_wr(nextaddr,intf.wdata,intf.wstrb,intf.awsize);
                     2'b10 : begin
-                        boundary_wr_next = warp_boundary(intf.awlen,intf.awsize);
+                        boundary_wr_next = wrap_boundary(intf.awlen,intf.awsize);
                         retaddr_next = data_wrap_wr(nextaddr,intf.wdata,intf.wstrb,boundary_wr_next,intf.awsize);
                     end
                 endcase
@@ -153,7 +153,7 @@ module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
                      2'b00 : retaddr_next = data_fixed_wr(nextaddr,intf.wdata,intf.wstrb);
                     2'b01 : retaddr_next = data_incr_wr(nextaddr,intf.wdata,intf.wstrb,intf.awsize);
                     2'b10 : begin
-                        boundary_wr_next = warp_boundary(intf.awlen,intf.awsize);
+                        boundary_wr_next = wrap_boundary(intf.awlen,intf.awsize);
                         retaddr_next = data_wrap_wr(nextaddr,intf.wdata,intf.wstrb,boundary_wr_next,intf.awsize);
                     end
                 endcase
@@ -247,25 +247,28 @@ module slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
                     2'b00 : rdretaddr_next = data_fixed_rd(rdnextaddr);
                     2'b01 : rdretaddr_next = data_incr_rd (rdnextaddr,intf.arsize);
                     2'b10 : begin
-                        boundary_rd_next = warp_boundary(intf.arlen,intf.arsize);
+                        boundary_rd_next = wrap_boundary(intf.arlen,intf.arsize);
                         rdretaddr_next   = data_wrap_rd (rdnextaddr, boundary_rd_next, intf.arsize);
                     end
                 endcase
-
-            wreadys : if(intf.wvalid) begin
-                intf.wready = 1;
-                case(intf.awburst)
-                     2'b00 : retaddr_next = data_fixed_wr(nextaddr,intf.wdata,intf.wstrb);
-                    2'b01 : retaddr_next = data_incr_wr(nextaddr,intf.wdata,intf.wstrb,intf.awsize);
+                rdnextaddr_next  = rdretaddr_next;
+                rdlen_count_next = rdlen_count + 1;
+                rnext_state      = (rdlen_count == intf.arlen) ? rlast_st : rvalids;
+            end
+            rvalids : if(intf.rready) begin
+                intf.rvalid = 1;
+                case(intf.arburst)
+                     2'b00 : rdretaddr_next = data_fixed_rd(rdnextaddr);
+                    2'b01 : rdretaddr_next = data_incr_rd (rdnextaddr,intf.arsize);
                     2'b10 : begin
-                        boundary_wr_next = warp_boundary(intf.awlen,intf.awsize);
-                        retaddr_next = data_wrap_wr(nextaddr,intf.wdata,intf.wstrb,boundary_wr_next,intf.awsize);
+                        boundary_rd_next = wrap_boundary(intf.arlen,intf.arsize);
+                        rdretaddr_next   = data_wrap_rd (rdnextaddr, boundary_rd_next, intf.arsize);
                     end
                 endcase
-                rdnextaddr_next = rdretaddr_next;
+                rdnextaddr_next  = rdretaddr_next;
                 rdlen_count_next = rdlen_count + 1;
-                if( rdlen_count_next == intf.arlen) rnext_state = rlast_st;
-                end
+                if(rdlen_count_next == intf.arlen - 1) rnext_state = rlast_st;
+            end
             rlast_st : begin
                 intf.rvalid     = 1;
                 intf.rlast      = 1;
