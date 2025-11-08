@@ -1,4 +1,4 @@
-interface axi_interface #(parameter ADDR_WIDTH=32,DATA_WIDTH=32,ID_WIDTH=4);
+interface axi_interface #(parameter ADDR_WIDTH=32,DATA_WIDTH=8,ID_WIDTH=4);
     logic       clk;
     logic       rst_n;
 
@@ -37,19 +37,7 @@ interface axi_interface #(parameter ADDR_WIDTH=32,DATA_WIDTH=32,ID_WIDTH=4);
     logic       rvalid;
     logic       rready;
     logic [1:0] rresp;
-
-    modport master (
-    input  awready, wready, bresp, bvalid, arready, rvalid, rresp,
-    output awaddr, awlen, awsize, awburst, awvalid,
-           wdata, wstrb, wlast, wvalid, bready,
-           araddr, arlen, arsize, arburst, arvalid, rready
-    );
-    
-    modport slave (
-    input  awaddr, awlen, awsize, awburst, awvalid,
-           wdata, wstrb, wlast, wvalid, bready,
-           araddr, arlen, arsize, arburst, arvalid, rready,
-    output awready, wready, bresp, bvalid, arready, rdata, rvalid, rresp
-    );
-    
+  
+  logic [3:0] next_addr_wr;
+  logic [3:0] next_addr_rd;
 endinterface

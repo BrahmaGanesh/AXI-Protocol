@@ -1,10 +1,12 @@
+`include "uvm_macros.svh"
+import uvm_pkg::*;
 `include "axi_interface.sv"
 `include "axi_pkg.sv"
 
 module top;
     import axi_pkg::*;
-    axi_interface #(32,32,4) vif();
-    axi_slave #(.ADDR_WIDTH(32),.DATA_WIDTH(8)) DUT(.intf(vif));
+    axi_interface vif();
+    axi_slave #(.ADDR_WIDTH(32),.DATA_WIDTH(32)) DUT(.intf(vif));
 
     initial begin
         vif.clk = 0;
@@ -22,6 +24,9 @@ module top;
     end
     initial begin
         uvm_config_db#(virtual axi_interface)::set(null,"*","vif",vif);
-        run_test("axi_base_test");
+      run_test("axi_fixed_test");
     end
+
+    assign vif.next_addr_wr = DUT.nextaddr_next;
+    assign vif.next_addr_rd = DUT.rdnextaddr;
 endmodule

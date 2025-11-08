@@ -1,13 +1,13 @@
-module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave intf);
+module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface intf);
 
-    logic [DATA_WIDTH -1 : 0] mem [0:255];
+    logic [DATA_WIDTH -1 : 0] mem [128];
 
     logic [ADDR_WIDTH - 1 : 0] wr_addr;
     logic [ADDR_WIDTH - 1 : 0] rd_addr;
 
-    typedef enum bit [2:0] {widel,waddr_dec, wstart,wreadys,wlast_st}wstate_t;
-    typedef enum bit [1:0] {bidle,bvalids,bwait}bstate_t;
-    typedef enum bit [2:0] {ridel,raddr_dec,rvalids,rlast_st} rstate_t;
+    typedef enum logic [2:0] {widel,waddr_dec, wstart,wreadys,wlast_st}wstate_t;
+    typedef enum logic [1:0] {bidle,bvalids,bwait}bstate_t;
+    typedef enum logic [2:0] {ridel,raddr_dec,rvalids,rlast_st} rstate_t;
 
     wstate_t wstate, wnext_state;
     bstate_t bstate, bnext_state;
@@ -34,53 +34,53 @@ module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave int
         end
     endfunction
         
-    function automatic [31:0] data_incr_wr(input [31:0] addr,input [31:0] wdata_i,input [3:0] wstrb,input [2:0] wsize);
+    function automatic [31:0] data_incr_wr(input [31:0] addr,input [31:0] wdata_i,input [3:0] wstrb,input [2:0] awsize);
         begin
             for(int i=0;i<4;i++)begin
                 if(wstrb[i])
                     mem[addr + i] = wdata_i[8*i +: 8];
             end
-            return addr +(1 << wsize);
+            return addr +(1 << awsize);
         end
     endfunction
 
-    function automatic [31:0] data_wrap_wr(input [31:0] addr,input [31:0] wdata_i,input [3:0] wstrb,input [7:0] boundary,input [3:0] wsize);
+    function automatic [31:0] data_wrap_wr(input [31:0] addr,input [31:0] wdata_i,input [3:0] wstrb,input [7:0] boundary,input [3:0] awsize);
         logic [31:0] next_addr;
         begin
             for(int i=0;i<4;i++) if(wstrb[i]) mem[addr + i] = wdata_i[8*i +: 8];
-            next_addr = addr + (1 << wsize);
+            next_addr = addr + (1 << awsize);
             if((next_addr & (boundary -1) ) == 0)
-                next_addr = addr - boundary + (1 << wsize);
+                next_addr = addr - boundary + (1 << awsize);
             return next_addr;
         end
     endfunction
 
-    function automatic [31:0] data_fixed_rd (input addr);
+    function automatic [31:0] data_fixed_rd (input [31:0] addr);
         begin
             intf.rdata = {mem[addr+3],mem[addr+2],mem[addr+1],mem[addr]};
             return addr;
         end
     endfunction
         
-    function automatic [31:0] data_incr_rd (input addr,input [2:0] rsize);
+    function automatic [31:0] data_incr_rd (input [31:0] addr,input [2:0] arsize);
         begin
             intf.rdata = {mem[addr+3],mem[addr+2],mem[addr+1],mem[addr]};
-            return addr + ( 1 << rsize);
+            return addr + ( 1 << arsize);
         end
     endfunction
 
-    function automatic [31:0] data_wrap_rd (input addr,input [7:0] boundary,input [2:0] rsize);
+    function automatic [31:0] data_wrap_rd (input [31:0] addr,input [7:0] boundary,input [2:0] arsize);
         logic [31:0] next_addr;
         begin
             intf.rdata = {mem[addr+3],mem[addr+2],mem[addr+1],mem[addr]};
-            next_addr = addr + ( 1 << rsize);
+            next_addr = addr + ( 1 << arsize);
             if ((next_addr & (boundary - 1))==0)
-                next_addr = addr - boundary + (1 << rsize);
+                next_addr = addr - boundary + (1 << arsize);
             return next_addr;
         end
     endfunction
 
-    function automatic [7:0] wrap_boundary (input [7:0] len, input [2:0] size);
+    function automatic [7:0] wrap_boundary (input [3:0] len, input [2:0] size);
         case(len)
             4'd1 : wrap_boundary = 2 * ( 1 << size );
             4'd3 : wrap_boundary = 4 * ( 1 << size );
@@ -120,11 +120,10 @@ module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave int
 
         case(wstate)
             widel : if(intf.awvalid) begin  
-                first_next = 0;
+                first_next      = 0;
                 wlen_count_next = 0;
-                wnext_state = waddr_dec;
+                wnext_state     = waddr_dec;
             end
-
             waddr_dec : begin
                 if(!first) begin
                     nextaddr_next = intf.awaddr;
@@ -204,8 +203,6 @@ module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave int
             bwait : if(!intf.bready) bnext_state = bidle;
         endcase
     end
-
-
     always_ff @(posedge intf.clk or negedge intf.rst_n) begin
         if(!intf.rst_n) begin
             rstate      <= ridel;
@@ -241,7 +238,7 @@ module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave int
                 rdlen_count_next = 0;
                 rnext_state = raddr_dec;
             end
-            raddr_dec : if(intf.rready) begin
+            raddr_dec :begin
                 intf.rvalid = 1;
                 case(intf.arburst)
                     2'b00 : rdretaddr_next = data_fixed_rd(rdnextaddr);
@@ -253,12 +250,13 @@ module axi_slave #(parameter ADDR_WIDTH=32,DATA_WIDTH=8)(axi_interface.slave int
                 endcase
                 rdnextaddr_next  = rdretaddr_next;
                 rdlen_count_next = rdlen_count + 1;
-                rnext_state      = (rdlen_count == intf.arlen) ? rlast_st : rvalids;
+                if(intf.rready)
+                rnext_state = (rdlen_count == intf.arlen) ? rlast_st : rvalids;
             end
             rvalids : if(intf.rready) begin
                 intf.rvalid = 1;
                 case(intf.arburst)
-                     2'b00 : rdretaddr_next = data_fixed_rd(rdnextaddr);
+                    2'b00 : rdretaddr_next = data_fixed_rd(rdnextaddr);
                     2'b01 : rdretaddr_next = data_incr_rd (rdnextaddr,intf.arsize);
                     2'b10 : begin
                         boundary_rd_next = wrap_boundary(intf.arlen,intf.arsize);

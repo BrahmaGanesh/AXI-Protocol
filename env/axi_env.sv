@@ -5,7 +5,7 @@ class axi_env extends uvm_env;
     axi_scoreboard soc;
     axi_coverage cov;
 
-    function new(string name="axi_agent",uvm_component parent=null);
+    function new(string name="axi_env",uvm_component parent=null);
         super.new(name,parent);
     endfunction
 
@@ -20,6 +20,6 @@ class axi_env extends uvm_env;
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
         agent.mon.mon_ap.connect(soc.analysis_export);
-        agent.mon,mon_ap.connect(cov.analysis_export);
+        agent.mon.mon_ap.connect(cov.analysis_export);
     endfunction
 endclass
